@@ -1,105 +1,6 @@
-#include <iostream>
-#include <cstddef>
-#include <string>
-#include<iomanip>
-#include<cstring>
-#define CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
+#include "pa2.h"
 
-using namespace std;
-
-int intFrag = 0;
-int extFrag = 0;
-int masterIndex = 1;
-bool isFreeSpace = true;
-
-class Node{
-	friend class LinkedList;
-private:
-
-	int value;
-	Node * next;
-	Node * prev;
-	string name;
-	int pgCap;
-
-public:
-
-	Node(void)
-		: next(NULL)
-	{ }
-
-	Node(int cap)
-		: pgCap(cap), next(NULL), prev(NULL)
-	{ }
-
-	Node(int val, string name)
-		: value(val), next(NULL), prev(NULL), name(name)
-	{ }
-
-	int getvalue(void){
-		return value;
-	}
-
-	string getName(void){
-		return name;
-	}
-
-	Node* getNext(void){
-		return next;
-	}
-
-	Node* getPrev(void){
-		return prev;
-	}
-
-	void append(int n);
-
-	void decreaseValue();
-
-	void increaseValue();
-
-};
-
-class LinkedList{
-	friend class Node;
-private:
-	Node * head;
-	Node * tail;
-	Node * temp;
-public:
-	LinkedList(void);
-	LinkedList(int val, int ind);
-	~LinkedList(void); //Destructor
-
-	void traverse_and_print();
-
-	void addNode(int n);
-
-	void addNode(int n, int pSize, string name);
-
-	void delProg(string prog, int pages);
-
-	int checkNum(string progName);
-
-	int getVal(string prog);
-
-	bool atTail(string name);
-	
-	int getIndexBest(int pgSize);
-
-	int getIndexWorst(int pgSize);
-
-	void consolidate(int ind, int numToDel);
-
-	void newList(int cap, int ind);
-
-	void clear();
-
-};
-
-LinkedList::LinkedList(){
+LinkedList::LinkedList(){ // Default Constructor
 	head = tail = temp = NULL;
 }
 
@@ -110,11 +11,11 @@ LinkedList::LinkedList(int cap, int ind){ //Creates freeList
 	head->name = "FREE";
 }
 
-LinkedList::~LinkedList(){
+LinkedList::~LinkedList(){ //Destructor
 	clear();
 }
 
-void LinkedList::clear(){
+void LinkedList::clear(){ // Clears LinkedList object
 	Node *cur = head;
 	Node *next;
 	while (cur != NULL){
@@ -125,13 +26,13 @@ void LinkedList::clear(){
 	head = NULL;
 }
 
-int getSize(int n){
+int getSize(int n){ // Input: size in KB, Output: size in pages
 	if (n <= 0){
-		cout << "Invalid Input - Size must be a positive number!";
+		cout << "Invalid Input - Size must be a positive number!\n";
 		return 0;
 	}
 	if (n > 128){
-		cout << "Invalid Input - Size is too big!";
+		cout << "Invalid Input - Size is too big!\n";
 		return 0;
 	}
 
@@ -147,14 +48,30 @@ int getSize(int n){
 	}
 }
 
-int LinkedList::getIndexWorst(int pgSize){ //Worst fit
+int LinkedList::getFrag(){ // Returns the external fragmentation (number of nodes in freeList)
+	int count = 0;
+	Node * cur = head;
+	while (cur != NULL){
+		count++;
+		cur = cur->next;
+	}
+	return count;
+}
+
+int LinkedList::getIndexWorst(int pgSize){ // Uses worst fit algorithm to return the index where the program should be placed
 	Node * cur = head;
 	Node * max = head;
 	while (cur->next != NULL){
 		cur = cur->next;
-		if (cur->pgCap > max->pgCap){
-			max = cur;
-
+		if (max->pgCap >= pgSize){
+			if (cur->pgCap > max->pgCap  && cur->pgCap >= pgSize){
+				max = cur;
+			}
+		}
+		else{
+			if (cur->pgCap >= pgSize){
+				max = cur;
+			}
 		}
 	}
 	int toReturn = max->value;//Index to add program
@@ -162,11 +79,42 @@ int LinkedList::getIndexWorst(int pgSize){ //Worst fit
 		cout << "Not enough free space to add program!" << endl;
 		return 0;
 	}
-	cout << "max index: " << max->value << endl;
-
+	
 	if (max->pgCap == pgSize){
-		return toReturn;
-		delete max;
+		if (max->prev != NULL){
+			temp = max->prev;
+			temp->next = max->next;
+			if (max->next != NULL){
+				max->next->prev = temp;
+			}
+			if (max == tail){
+				tail = temp;
+			}
+			delete max;
+			return toReturn;
+		}
+		else if (max->next != NULL){
+			temp = max->next;
+			temp->prev = max->prev;
+			if (max->prev != NULL){
+				max->prev->next = temp;
+			}
+			if (max == head){
+				head = temp;
+			}
+			delete max;
+			return toReturn;
+		}
+		else{
+			delete max;
+			head = new Node(0);
+			tail = head;
+			head->value = 0;
+			head->name = "FREE";
+			cout << "No free space left!" << endl;
+			isFreeSpace = false;
+			return toReturn;
+		}
 	}
 	else{
 		max->value += pgSize;
@@ -175,7 +123,7 @@ int LinkedList::getIndexWorst(int pgSize){ //Worst fit
 	}
 }
 
-int LinkedList::getIndexBest(int pgSize){ //Best fit
+int LinkedList::getIndexBest(int pgSize){ // Uses best fit algorithm to return the index where the program should be placed
 	Node * cur = head;
 	Node * min = head;
 	while (cur->next != NULL){
@@ -191,15 +139,14 @@ int LinkedList::getIndexBest(int pgSize){ //Best fit
 			}
 		}
 	}
-	
+
 	int toReturn = min->value;//Index to add program
 	if (min->pgCap < pgSize){
 		cout << "Not enough free space to add program!" << endl;
 		return 0;
 	}
-	cout << "min index: " << min->value << endl;
-
-	if (min->pgCap == pgSize){
+	
+	if (min->pgCap == pgSize){ //Deletes node
 		if (min->prev != NULL){
 			temp = min->prev;
 			temp->next = min->next;
@@ -230,7 +177,7 @@ int LinkedList::getIndexBest(int pgSize){ //Best fit
 			tail = head;
 			head->value = 0;
 			head->name = "FREE";
-			cout << "No free space left!" << endl;
+			cout << "Memory will be filled!\n" << endl;
 			isFreeSpace = false;
 			return toReturn;
 		}
@@ -242,15 +189,13 @@ int LinkedList::getIndexBest(int pgSize){ //Best fit
 	}
 }
 
-void LinkedList::addNode(int index, int pSize, string name){
+void LinkedList::addNode(int index, int pSize, string name){ //Adds programs to a specific location in usedList
 	if (index == 0){
 		return;
 	}
 	for (int i = index; i < index + pSize; i++){
-		Node *newNode = new Node;
+		Node *newNode = new Node();
 		newNode->value = i;
-		newNode->next = NULL;
-		newNode->prev = NULL;
 		newNode->name = name;
 		newNode->pgCap = pSize;
 		Node *cur = head;
@@ -266,30 +211,30 @@ void LinkedList::addNode(int index, int pSize, string name){
 			head = newNode;
 		}
 		else{
-			while (cur != NULL && cur->next && cur->next->value < i){// cur->next OR cur->next != NULL ???
+			while (cur != NULL && cur->next && cur->next->value < i){
 				cur = cur->next;
 			}
-				if (cur->next == NULL){ // At Tail
-					cur->next = newNode;
-					tail = newNode;
-					newNode->next = NULL;
-					newNode->prev = cur;
-					cur = cur->next;
-				}
-				else{
-					temp = cur->next;
-					cur->next = newNode;
-					newNode->prev = cur;
-					newNode->next = temp;
-					temp->prev = newNode;
-				}
-			
+			if (cur->next == NULL){ // At Tail
+				cur->next = newNode;
+				tail = newNode;
+				newNode->next = NULL;
+				newNode->prev = cur;
+				cur = cur->next;
+			}
+			else{
+				temp = cur->next;
+				cur->next = newNode;
+				newNode->prev = cur;
+				newNode->next = temp;
+				temp->prev = newNode;
+			}
+
 		}
 	}
-	
+	cout << "Program " << name << " added successfully, " << pSize << " page(s) used\n" << endl;
 }
 
-void LinkedList::delProg(string progName, int pages){
+void LinkedList::delProg(string progName, int pages){ //Deletes programs of the specified name
 	for (int i = 0; i < pages; i++){
 		Node * del = head;
 		while (del->name != progName){
@@ -304,6 +249,7 @@ void LinkedList::delProg(string progName, int pages){
 			else{
 				head = del->next;
 				delete del;
+				head->prev = NULL;
 			}
 		}
 		else{
@@ -320,50 +266,91 @@ void LinkedList::delProg(string progName, int pages){
 			delete del;
 		}
 	}
+	cout << "Program " << progName << " successfully killed, " << pages << " page(s) reclaimed\n" << endl;
 }
 
-void LinkedList::consolidate(int ind, int numToDel){
+void LinkedList::consolidate(int ind, int numToDel){ //Adds memory back to freeList, and defragments the nodes
 	Node * cur = head;
 	bool iso = true;
 	while (cur->value < ind && cur->next != NULL){
 		cur = cur->next;
 	}
-	if (cur->value == ind + numToDel){
-		cur->value = ind;
-		cur->pgCap += numToDel;
-		iso = false;
-	}
-	if (cur->prev && cur->prev->value + cur->prev->pgCap == ind){
-		if (cur->prev == head){
-			cur->value = head->value;
-			cur->pgCap += head->pgCap;
-			head = cur;
-			delete cur->prev;
+	//Check all possibilities
+	if (cur->prev){
+		Node * p = cur->prev;
+		if (ind < cur->value){
+			if (p->value + p->pgCap == ind){
+				p->pgCap += numToDel;
+				iso = false;
+			}
+			else if (ind + numToDel == cur->value){
+				cur->value = ind;
+				cur->pgCap += numToDel;
+				iso = false;
+			}
+			if (cur->value == p->value + p->pgCap){
+				p->pgCap += cur->pgCap;
+				if (cur->next){
+					Node * n = cur->next;
+					p->next = n;
+					n->prev = p;
+					delete cur;
+				}
+				else{
+					p->next = NULL;
+					delete cur;
+				}
+			}
 		}
-		else{
-			Node * p = cur->prev->prev;
-			cur->value = cur->prev->value;
-			cur->pgCap += cur->prev->pgCap;
-			p->next = cur;
-			delete cur->prev;
-			cur->prev = p;
+		else if (cur->value + cur->pgCap == ind){
+			cur->pgCap += numToDel;
+			iso = false;
 		}
-		iso = false;
+
 	}
-	if (cur->value + cur->pgCap == ind){
-		cur->pgCap += numToDel;
-		iso = false;
-	}
+	else{ //Only one node
+		if (cur->value == ind + numToDel){
+			cur->value = ind;
+			cur->pgCap += numToDel;
+			iso = false;
+		}
+		else if (ind == cur->value + cur->pgCap){
+			cur->pgCap += numToDel;
+			iso = false;
+		}
+	}	
 	if (iso){
 		Node * newNode = new Node;
 		newNode->value = ind;
 		newNode->pgCap = numToDel;
 		newNode->name = "FREE";
-		newNode->prev = cur->prev;
-		cur->prev = newNode;
-		newNode->next = cur;
-		if (newNode->prev == NULL){
-			head = newNode;
+		if (cur->value < ind){
+			newNode->prev = cur;
+			if (cur->next){
+				Node * n = cur->next;
+				cur->next = newNode;
+				newNode->next = n;
+				n->prev = newNode;
+			}
+			else{
+				cur->next = newNode;
+				newNode->prev = cur;
+				tail = newNode;
+			}
+		}
+		else{
+			newNode->next = cur;
+			if (cur->prev){
+				Node * p = cur->prev;
+				p->next = newNode;
+				newNode->prev = p;
+				cur->prev = newNode;
+			}
+			else{
+				cur->prev = newNode;
+				head = newNode;
+			}
+			
 		}
 	}
 }
@@ -374,14 +361,13 @@ void LinkedList::traverse_and_print(){
 
 	Node *cur = head;
 	if (head == NULL){
-		cout << "The List is Empty!" << endl;
 		for (int i = 1; i <= 32; i++){
 			cout << left << setw(width) << setfill(fill) << "FREE";
 		}
 		return;
 	}
 
-	cout << "MEMORY: " << "Tail: " << tail->name <<endl;
+	cout << "MEMORY: \n" << endl;
 
 	for (int i = 1; i <= 32; i++){
 		if (cur->value == i){
@@ -396,7 +382,7 @@ void LinkedList::traverse_and_print(){
 	}
 }
 
-int LinkedList::getVal(string prog){
+int LinkedList::getVal(string prog){ // Returns the starting index of the chain of programs of the same name
 	Node * cur = head;
 	while (cur->name != prog){
 		cur = cur->next;
@@ -404,7 +390,11 @@ int LinkedList::getVal(string prog){
 	return cur->value;
 }
 
-int LinkedList::checkNum(string progName){
+int LinkedList::checkNum(string progName){ //Returns the number of programs to be deleted
+	if (head == NULL){
+		cout << "Program '" << progName << "' does not exist!\n" << endl;
+		return 0;
+	}
 	Node * cur = head;
 	int count = 0;
 	while (cur != tail){
@@ -417,23 +407,35 @@ int LinkedList::checkNum(string progName){
 		count++;
 	}
 	if (count == 0){
-		cout << "Program " << progName << " does not exist!" << endl;
+		cout << "Program " << progName << " does not exist!\n" << endl;
 	}
 	return count;
 }
 
-void LinkedList::newList(int cap, int ind){
+void LinkedList::newList(int cap, int ind){ //Re-creates the freeList after all memory is used and a program is deleted
 	head->value = ind;
 	head->pgCap = cap;
+	head = tail;
+	head->next = NULL;
+	head->prev = NULL;
 }
 
-int main(int argc, char**argv){
-	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-	/*
-	if (argc != 2 || (argv[1] != "best" && argv[1] != "worst")){
-		return;
+bool LinkedList::alreadyRunning(string name){ //Checks if a program is already running
+	bool toReturn = false;
+	Node * cur = head;
+	while (cur != NULL){
+		if (cur->name == name){
+			toReturn = true;
+		}
+		cur = cur->next;
 	}
-	*/
+	return toReturn;
+} 
+
+int main(int argc, char**argv){
+	if (argc != 2 || (strcmp(argv[1], "best") != 0 && strcmp(argv[1], "worst") != 0)){
+	return 0;
+	}
 	LinkedList freeList(32, 1);
 	LinkedList usedList;
 	int choice, kbSize, pSize;
@@ -447,48 +449,67 @@ int main(int argc, char**argv){
 			<< "5 - Exit\n" << endl;
 		cout << "Choice: ";
 		cin >> choice;
+		
 		if (choice == 5){
 			break;
 		}
 
 		if (choice == 1){
-			if (isFreeSpace){
+			if (isFreeSpace){ //If there is free space
 				cout << "\nProgram Name: ";
 				cin >> pName;
 				cout << "\nProgram Size (KB): ";
 				cin >> kbSize;
-				pSize = getSize(kbSize);
-				int addIndex = freeList.getIndexBest(pSize);
-				usedList.addNode(addIndex, pSize, pName);
+				pSize = getSize(kbSize); //Size in pages
+				if (pSize != 0){
+					bool running = usedList.alreadyRunning(pName); //Checks if already running
+					if (running){
+						cout << "Program '" << pName << "' is already running!\n" << endl;
+					}
+					else{ // uses specified algorithm
+						int addIndex;
+						if (strcmp(argv[1], "best") != 0){
+							addIndex = freeList.getIndexWorst(pSize);
+						}
+						else
+							addIndex = freeList.getIndexBest(pSize);
+						usedList.addNode(addIndex, pSize, pName);
+					}
+				}
 			}
 			else
-				cout << "No free space left - cannot add program" << endl;
+				cout << "No free space left - cannot add program\n" << endl;
 		}
 
 		if (choice == 2){
-			cout << "\nProgram Name: ";
+			cout << "Program Name: ";
 			cin >> pName;
 			int numToDel = usedList.checkNum(pName);
 			if (numToDel > 0){
-				int ind = usedList.getVal(pName);
-				cout << "\n" << numToDel << " pages will be killed starting at index " << ind << endl;
+				int ind = usedList.getVal(pName); // Index of first program in program block to delete
 				usedList.delProg(pName, numToDel);
-				if (!isFreeSpace){
-					freeList.newList(numToDel, ind);
-					isFreeSpace = true;
+				if (!isFreeSpace){ // If there was no free space prior to deleting, create new freeList
+					freeList.newList(numToDel, ind); // with these parameters
+					isFreeSpace = true; // Memory now has free space
 				}
 				else
-					freeList.consolidate(ind, numToDel);
+					freeList.consolidate(ind, numToDel); // If memory already had some free space
 			}
 		}
+
+		if (choice == 3){
+			if (!isFreeSpace){
+				cout << "There are no fragments - Memory is full\n" << endl;
+			}
+			else{
+				cout << "There are " << freeList.getFrag() << " external fragments\n" << endl;
+			}
+		}
+
 		if (choice == 4){
 			usedList.traverse_and_print();
 		}
-
-			
 	}
 	usedList.clear();
 	return 0;
-	_CrtDumpMemoryLeaks();
-
 }
